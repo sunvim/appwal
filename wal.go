@@ -48,11 +48,6 @@ type Options struct {
 	// memory for caching. Increasing this value may enhance performance for
 	// concurrent read operations. Default is 1
 	SegmentCacheSize int
-	// NoCopy allows for the Read() operation to return the raw underlying data
-	// slice. This is an optimization to help minimize allocations. When this
-	// option is set, do not modify the returned data because it may affect
-	// other Read calls. Default false
-	NoCopy bool
 	// Perms represents the datafiles modes and permission bits
 	DirPerms  os.FileMode
 	FilePerms os.FileMode
@@ -63,7 +58,6 @@ var DefaultOptions = &Options{
 	NoSync:           false,    // Fsync after every write
 	SegmentSize:      20971520, // 20 MB log segment files.
 	SegmentCacheSize: 2,        // Number of cached in-memory segments
-	NoCopy:           false,    // Make a new copy of data for every Read call.
 	DirPerms:         0750,     // Permissions for the created directories
 	FilePerms:        0640,     // Permissions for the created data files
 }
@@ -565,7 +559,6 @@ func (l *Log) Read(index uint64) (data []byte, err error) {
 	}
 	epos := s.epos[index-s.index]
 	edata := s.ebuf[epos.pos:epos.end]
-	// binary read
 	size, n := binary.Uvarint(edata)
 	if n <= 0 {
 		return nil, ErrCorrupt
@@ -573,12 +566,8 @@ func (l *Log) Read(index uint64) (data []byte, err error) {
 	if uint64(len(edata)-n) < size {
 		return nil, ErrCorrupt
 	}
-	if l.opts.NoCopy {
-		data = edata[n : uint64(n)+size]
-	} else {
-		data = make([]byte, size)
-		copy(data, edata[n:])
-	}
+	data = make([]byte, size)
+	copy(data, edata[n:])
 	return data, nil
 }
 
